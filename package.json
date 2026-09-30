@@ -5,27 +5,37 @@
   "repository": {},
   "license": "UNLICENSED",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@remotion/cli": "4.0.520",
+    "@remotion/lottie": "^4.0.520",
+    "@remotion/tailwind-v4": "4.0.520",
     "@remotion/zod-types": "4.0.520",
+    "lottie-web": "^5.13.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "remotion": "4.0.520",
-    "zod": "4.4.3",
-    "@remotion/tailwind-v4": "4.0.520",
-    "tailwindcss": "4.0.0"
+    "tailwindcss": "4.0.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@remotion/eslint-config-flat": "4.0.520",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "19.2.7",
+    "@types/react-dom": "^19.2.7",
     "@types/web": "0.0.166",
+    "@vitejs/plugin-react": "^6.1.1",
     "eslint": "9.19.0",
     "prettier": "3.8.1",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vite": "^8.2.2"
   },
   "scripts": {
-    "dev": "remotion studio",
-    "build": "remotion bundle",
+    "dev": "vite",
+    "start": "node server.js",
+    "preview": "vite preview",
+    "remotion": "remotion studio",
+    "build": "vite build",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc"
   },

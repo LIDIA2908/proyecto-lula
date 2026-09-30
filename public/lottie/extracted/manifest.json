@@ -1,0 +1,1 @@
+{"version":"2","generator":"@lottiefiles/creator@1.110.0","animations":[{"id":"state1"},{"id":"pose3"},{"id":"pose2"},{"id":"pose1"}],"stateMachines":[{"id":"StateMachine1","name":"StateMachine1"}],"initial":{"animation":"state1"}}

@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  proyecto-lula:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lula_web_app
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    # Si usas Nginx Proxy Manager o Traefik, puedes quitar las publicaciones de puertos directas o ajustar a "8080:80"
