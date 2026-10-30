@@ -8,7 +8,7 @@ import { CharacterState } from "../components/LottieCharacter";
 import { charToLottieSegment } from "./elevenLabsService";
 
 const DEFAULT_LIVE_MODEL = "gemini-3.8-live";
-const DEFAULT_LIVE_VOICE = "Puck";
+const DEFAULT_LIVE_VOICE = "Zephyr"; // Voz prebuilt de la brujita en Live
 
 const CAPTURE_SAMPLE_RATE = 16000; // Gemini requires 16kHz input
 const PLAYBACK_SAMPLE_RATE = 24000; // Gemini outputs 24kHz audio
