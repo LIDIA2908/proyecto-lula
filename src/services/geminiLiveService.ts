@@ -71,21 +71,14 @@ export function getGeminiLiveVoice(): string {
   return voice && voice.trim() !== "" ? voice.trim() : DEFAULT_LIVE_VOICE;
 }
 
-export function getGeminiLiveApiKey(): string | null {
-  const rawKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const apiKey =
-    rawKey && typeof rawKey === "string" && rawKey.trim() !== "" && !rawKey.includes("tu_clave")
-      ? rawKey.trim()
-      : null;
-  return apiKey;
+export function getGeminiLiveTokenUrl(): string {
+  const url = import.meta.env.VITE_GEMINI_LIVE_TOKEN_URL;
+  return url && url.trim() !== "" ? url.trim() : "/api/token";
 }
 
 export function isGeminiLiveAvailable(): boolean {
-  return (
-    typeof WebSocket !== "undefined" &&
-    typeof import.meta !== "undefined" &&
-    getGeminiLiveApiKey() !== null
-  );
+  // Token availability is decided by the /api/token endpoint at connect time
+  return typeof WebSocket !== "undefined" && typeof fetch !== "undefined";
 }
 
 /** Float32 samples -> 16-bit PCM little-endian, base64-encoded */
@@ -166,15 +159,30 @@ export class GeminiLiveCall {
     this.muted = muted;
   }
 
+  /** Fetches a short-lived auth token minted by the backend (/api/token) */
+  private async fetchEphemeralToken(): Promise<string> {
+    const res = await fetch(getGeminiLiveTokenUrl(), { method: "POST" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.token) {
+      throw new Error(
+        body?.error || `No se pudo obtener token efimero (${res.status})`
+      );
+    }
+    return body.token as string;
+  }
+
   async connect(): Promise<void> {
-    const apiKey = getGeminiLiveApiKey();
-    if (!apiKey) throw new Error("Falta VITE_GEMINI_API_KEY para Gemini Live");
     if (this.ws) return;
+
+    // The Live WebSocket rejects raw API keys: it needs an ephemeral token
+    const ephemeralToken = await this.fetchEphemeralToken();
 
     await this.setupPlaybackPipeline();
 
     return new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(`${LIVE_WS_BASE}?access_token=${apiKey}`);
+      const ws = new WebSocket(
+        `${LIVE_WS_BASE}?access_token=${encodeURIComponent(ephemeralToken)}`
+      );
       this.ws = ws;
 
       const timeout = window.setTimeout(() => {

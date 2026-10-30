@@ -2,6 +2,10 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  isValidGeminiApiKey,
+  mintGeminiLiveToken,
+} from "./scripts/gemini-live-token.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,7 +13,9 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, "dist");
 
-const MIME_TYPES: Record<string, string> = {
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -22,7 +28,30 @@ const MIME_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
+function handleTokenRequest(req, res) {
+  if (!isValidGeminiApiKey(GEMINI_API_KEY)) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Falta GEMINI_API_KEY valida en el entorno" }));
+    return;
+  }
+  mintGeminiLiveToken(GEMINI_API_KEY)
+    .then((data) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(data));
+    })
+    .catch((err) => {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: String(err?.message || err) }));
+    });
+}
+
 const server = http.createServer((req, res) => {
+  // Ephemeral token endpoint for the Gemini Live API WebSocket
+  if (req.method === "POST" && (req.url || "/").split("?")[0] === "/api/token") {
+    handleTokenRequest(req, res);
+    return;
+  }
+
   let reqPath = decodeURIComponent((req.url || "/").split("?")[0]);
   let filePath = path.join(DIST_DIR, reqPath);
 
