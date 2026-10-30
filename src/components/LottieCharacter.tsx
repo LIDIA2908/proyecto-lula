@@ -69,27 +69,32 @@ export const LottieCharacter: React.FC<LottieCharacterProps> = ({ noSpeak, state
     };
   }, []);
 
-  // Listen to ElevenLabs speech start / end events to toggle Viseme mode vs Fallback loop
+  // Listen to speech start / end events (ElevenLabs or Gemini Live) to toggle
+  // Viseme mode vs Fallback loop
   useEffect(() => {
-    const handleElevenStart = () => {
+    const handleSpeechStart = () => {
       setIsElevenMode(true);
       if (animRef.current) {
         animRef.current.playSegments([121, 149], true); // BMP (closed mouth segment)
       }
     };
-    const handleElevenEnd = () => {
+    const handleSpeechEnd = () => {
       setIsElevenMode(false);
       if (animRef.current) {
         animRef.current.playSegments(activeSegment, true);
       }
     };
 
-    window.addEventListener("eleven-speech-start", handleElevenStart);
-    window.addEventListener("eleven-speech-end", handleElevenEnd);
+    window.addEventListener("eleven-speech-start", handleSpeechStart);
+    window.addEventListener("eleven-speech-end", handleSpeechEnd);
+    window.addEventListener("speech-start", handleSpeechStart);
+    window.addEventListener("speech-end", handleSpeechEnd);
 
     return () => {
-      window.removeEventListener("eleven-speech-start", handleElevenStart);
-      window.removeEventListener("eleven-speech-end", handleElevenEnd);
+      window.removeEventListener("eleven-speech-start", handleSpeechStart);
+      window.removeEventListener("eleven-speech-end", handleSpeechEnd);
+      window.removeEventListener("speech-start", handleSpeechStart);
+      window.removeEventListener("speech-end", handleSpeechEnd);
     };
   }, [activeSegment]);
 

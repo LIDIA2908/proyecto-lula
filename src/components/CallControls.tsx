@@ -14,6 +14,8 @@ interface CallControlsProps {
   isListening: boolean;
   isThinking: boolean;
   isDarkMode?: boolean;
+  /** Gemini Live mode: mic always on with VAD, no push-to-talk button */
+  liveMode?: boolean;
 }
 
 export const CallControls: React.FC<CallControlsProps> = ({
@@ -25,6 +27,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
   isListening,
   isThinking,
   isDarkMode = true,
+  liveMode = false,
 }) => {
   const [inputText, setInputText] = useState("");
 
@@ -103,33 +106,35 @@ export const CallControls: React.FC<CallControlsProps> = ({
           />
         </button>
 
-        {/* Voice Speech Listener Button */}
-        <button
-          onClick={onStartVoiceListening}
-          disabled={isThinking}
-          className={`px-4 h-10 sm:px-5 sm:h-11 rounded-2xl border-2 border-b-4 font-black text-xs tracking-wider uppercase flex items-center gap-1.5 transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0 ${
-            isListening
-              ? "bg-amber-400 border-amber-600 text-slate-950 animate-pulse scale-105"
-              : "bg-emerald-500 hover:bg-emerald-400 border-emerald-700 text-slate-950"
-          }`}
-        >
-          {isListening ? (
-            <AudioWaveVisualizer
-              isMuted={false}
-              isSpeaking={true}
-              barCount={4}
-              className="h-3.5"
-              activeColor="bg-slate-950"
-            />
-          ) : (
-            <Icon
-              name="speak"
-              className="w-4 h-4 sm:w-5 sm:h-5"
-              colorClass="bg-slate-950"
-            />
-          )}
-          <span>{isListening ? "Escuchando..." : "Hablar a Lula"}</span>
-        </button>
+        {/* Voice Speech Listener Button (hidden in Gemini Live mode: mic is always on) */}
+        {!liveMode && (
+          <button
+            onClick={onStartVoiceListening}
+            disabled={isThinking}
+            className={`px-4 h-10 sm:px-5 sm:h-11 rounded-2xl border-2 border-b-4 font-black text-xs tracking-wider uppercase flex items-center gap-1.5 transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0 ${
+              isListening
+                ? "bg-amber-400 border-amber-600 text-slate-950 animate-pulse scale-105"
+                : "bg-emerald-500 hover:bg-emerald-400 border-emerald-700 text-slate-950"
+            }`}
+          >
+            {isListening ? (
+              <AudioWaveVisualizer
+                isMuted={false}
+                isSpeaking={true}
+                barCount={4}
+                className="h-3.5"
+                activeColor="bg-slate-950"
+              />
+            ) : (
+              <Icon
+                name="speak"
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                colorClass="bg-slate-950"
+              />
+            )}
+            <span>{isListening ? "Escuchando..." : "Hablar a Lula"}</span>
+          </button>
+        )}
 
         {/* End Call Button */}
         <button

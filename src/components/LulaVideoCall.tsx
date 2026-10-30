@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Player } from "@remotion/player";
-import { LottieCharacter } from "./LottieCharacter";
+import { LottieCharacter, CharacterState } from "./LottieCharacter";
 import { CallControls } from "./CallControls";
 import { CelebrationXPComposition } from "../remotion/CelebrationXPComposition";
 import { askAIAgent } from "../services/aiAgentService";
 import { listenToUserSpeech, speakText, stopSpeaking } from "../services/voiceService";
+import { GeminiLiveCall, isGeminiLiveAvailable } from "../services/geminiLiveService";
 import { Icon } from "./Icon";
 
 interface LulaVideoCallProps {
@@ -26,8 +27,56 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
+  // Gemini Live realtime states
+  const [liveReady, setLiveReady] = useState(false);
+  const [liveThinking, setLiveThinking] = useState(false);
+  const [liveSubtitle, setLiveSubtitle] = useState("");
+  const [emotion, setEmotion] = useState<CharacterState | undefined>(undefined);
+  const liveCallRef = useRef<GeminiLiveCall | null>(null);
+
   // Real-time call duration timer
   const [callSeconds, setCallSeconds] = useState(0);
+
+  // Open the Gemini Live realtime session (mic always on, native audio out)
+  const startLiveCall = () => {
+    if (!isGeminiLiveAvailable()) return;
+    liveCallRef.current?.disconnect();
+    const call = new GeminiLiveCall({
+      onConnected: () => setLiveReady(true),
+      onDisconnected: () => {
+        setLiveReady(false);
+        setLiveThinking(false);
+        setNoSpeak(true);
+      },
+      onSpeaking: (speaking) => setNoSpeak(!speaking),
+      onThinking: (thinking) => {
+        setLiveThinking(thinking);
+        if (thinking) {
+          setNoSpeak(true);
+          setLiveSubtitle("");
+        }
+      },
+      onSubtitle: (text) => setLiveSubtitle(text),
+      onEmotion: (nextEmotion) => setEmotion(nextEmotion),
+      onError: (message) => {
+        console.warn("Gemini Live notice:", message);
+      },
+    });
+    liveCallRef.current = call;
+    call.connect().catch((err) => {
+      console.warn("Gemini Live no disponible, se usará la voz local:", err);
+      liveCallRef.current = null;
+      setLiveReady(false);
+    });
+  };
+
+  useEffect(() => {
+    startLiveCall();
+    return () => {
+      liveCallRef.current?.disconnect();
+      liveCallRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -43,8 +92,18 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
   // Process user input question via AI Agent
   const handleAskQuestion = async (questionText: string) => {
     stopSpeaking();
-    setIsThinking(true);
     setNoSpeak(true); // Callar while thinking
+    setLiveSubtitle("");
+
+    // Gemini Live session handles the whole turn (brain + native voice)
+    const live = liveCallRef.current;
+    if (live?.isConnected()) {
+      live.interruptPlayback();
+      live.sendText(questionText);
+      return;
+    }
+
+    setIsThinking(true);
 
     try {
       const aiRes = await askAIAgent(questionText);
@@ -137,15 +196,37 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
 
       {/* MAIN STAGE (Center Character) */}
       <div className="relative flex-1 flex flex-col items-center justify-center px-2 sm:px-4 py-2 z-10 min-h-0 overflow-hidden gap-2 animate-enter-scale">
-        <LottieCharacter noSpeak={noSpeak} />
+        <LottieCharacter
+          noSpeak={noSpeak}
+          state={liveReady && noSpeak ? emotion : undefined}
+        />
+        {liveReady && liveSubtitle && (
+          <div
+            className={`z-20 max-w-md text-center px-4 py-2 rounded-2xl border-2 text-xs sm:text-sm font-bold shadow-lg animate-fadeIn ${
+              isDarkMode
+                ? "bg-slate-900/90 border-slate-700 text-slate-100"
+                : "bg-white/95 border-slate-300 text-slate-800"
+            }`}
+          >
+            {liveSubtitle}
+          </div>
+        )}
       </div>
 
       {/* CALL CONTROL BAR */}
       <div className="animate-enter-up relative z-30 pt-1 flex flex-col items-center gap-2">
         <CallControls
           isMuted={isMuted}
-          onToggleMute={() => setIsMuted(!isMuted)}
+          onToggleMute={() => {
+            const next = !isMuted;
+            setIsMuted(next);
+            liveCallRef.current?.setMuted(next);
+          }}
           onEndCall={() => {
+            liveCallRef.current?.disconnect();
+            liveCallRef.current = null;
+            setLiveReady(false);
+            setLiveThinking(false);
             stopSpeaking();
             setNoSpeak(true);
             setIsCallEnded(true);
@@ -153,8 +234,9 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
           onSendTextQuestion={handleAskQuestion}
           onStartVoiceListening={handleStartListening}
           isListening={isListening}
-          isThinking={isThinking}
+          isThinking={isThinking || liveThinking}
           isDarkMode={isDarkMode}
+          liveMode={liveReady}
         />
 
         {/* Visit State Machine Button */}
@@ -214,6 +296,8 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
               onClick={() => {
                 setIsCallEnded(false);
                 setNoSpeak(true);
+                setLiveSubtitle("");
+                startLiveCall(); // Reconnect the Gemini Live session
               }}
               className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 border-2 border-b-4 border-emerald-700 text-slate-950 font-black text-xs sm:text-sm tracking-wider uppercase shadow-lg transition-transform active:translate-y-0.5 active:border-b-2 cursor-pointer"
             >
@@ -237,6 +321,8 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
                 onClick={() => {
                   setIsCallEnded(false);
                   setNoSpeak(true);
+                  setLiveSubtitle("");
+                  startLiveCall();
                   onReturnToDialer();
                 }}
                 className={`px-6 py-3 rounded-2xl border-2 border-b-4 font-black text-xs sm:text-sm tracking-wider uppercase shadow-lg transition-transform active:translate-y-0.5 active:border-b-2 cursor-pointer ${
