@@ -79,6 +79,39 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
     };
   }, []);
 
+  // Atajo de teclado: mantener ESPACIO = push-to-talk (solo modo Live)
+  useEffect(() => {
+    if (!liveReady || isCallEnded) return;
+
+    const isTypingTarget = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || isTypingTarget(e.target)) return;
+      e.preventDefault(); // evita el scroll de la pagina
+      handleTalkPress();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || isTypingTarget(e.target)) return;
+      e.preventDefault();
+      handleTalkRelease();
+    };
+    const onBlur = () => handleTalkRelease(); // soltar si la ventana pierde foco
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+      handleTalkRelease(); // por si se desmonta con la tecla presionada
+    };
+  }, [liveReady, isCallEnded]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCallSeconds((prev) => prev + 1);

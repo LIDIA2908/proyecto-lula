@@ -119,7 +119,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
               title={
                 isTalkActive
                   ? "Suelta para enviarle tu voz a Lula"
-                  : "Mantén presionado para hablar"
+                  : "Mantén presionado para hablar (o la tecla Espacio)"
               }
             >
               {isTalkActive ? (
@@ -133,7 +133,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
               ) : (
                 <Icon name="microphone" className="w-5 h-5" colorClass="bg-slate-950" />
               )}
-              <span>{isTalkActive ? "Grabando... suelta para enviar" : "Mantén para hablar"}</span>
+              <span>{isTalkActive ? "Grabando... suelta para enviar" : "Mantén para hablar (Espacio)"}</span>
             </button>
 
             {/* End Call Button */}
