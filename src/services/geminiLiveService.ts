@@ -22,12 +22,11 @@ const END_WATCHDOG_MS = 200;
 const END_TOLERANCE_S = 0.08;
 const FALLBACK_CHAR_RATE = 14; // chars/second estimate before audio calibration
 
-// VAD del cliente (hybrid VAD): EL CLIENTE decide cuándo terminó de hablar
-// el usuario, de modo que las pausas cortas ya no partan el turno en varios.
-// El server solo conserva turnComplete rápido vía realtimeInput.audioStreamEnd.
+// Push-to-talk: el audio solo se captura mientras el botón está presionado.
+// Al soltar, si hubo habla real, el turno se cierra con audioStreamEnd y
+// Lula responde exactamente a eso.
 const USER_SPEECH_RMS_THRESHOLD = 0.012; // energía RMS que cuenta como voz
-const USER_TURN_SILENCE_MS = 800; // silencio sostenido que cierra el turno
-const MIN_USER_SPEECH_MS = 300; // habla mínima para que el turno sea válido
+const MIN_USER_SPEECH_MS = 300; // habla mínima al soltar para enviar el turno
 
 export const LULA_LIVE_SYSTEM_INSTRUCTIONS = `Eres Lula, una asistente virtual inteligente, simpática y divertida que está en una videollamada interactiva con el usuario. Respondes a TODO TIPO DE PREGUNTAS en español.
 
@@ -137,7 +136,6 @@ export class GeminiLiveCall {
   private micStream: MediaStream | null = null;
   private captureCtx: AudioContext | null = null;
   private captureSource: MediaStreamAudioSourceNode | null = null;
-  private muted = false;
 
   // Playback pipeline (24kHz)
   private playbackCtx: AudioContext | null = null;
@@ -152,10 +150,9 @@ export class GeminiLiveCall {
   private visemeTimer: number | null = null;
   private endWatchdog: number | null = null;
 
-  // Estado del VAD de cliente (hybrid VAD)
-  private vadActive = false; // usuario hablando localmente
-  private vadSpeechMs = 0; // habla acumulada del turno actual
-  private vadLastVoiceAt = 0; // último chunk con voz
+  // Estado de push-to-talk
+  private talkActive = false;
+  private vadSpeechMs = 0; // habla acumulada mientras el botón está presionado
 
   constructor(callbacks: GeminiLiveCallbacks) {
     this.callbacks = callbacks;
@@ -167,12 +164,22 @@ export class GeminiLiveCall {
     return this.connected && this.ws?.readyState === WebSocket.OPEN;
   }
 
-  setMuted(muted: boolean): void {
-    this.muted = muted;
-    if (muted && this.vadActive) {
-      // El stream de audio se pausa: hay que vaciar el turno parcial (docs VAD)
-      this.flushUserTurn();
+  /** Push-to-talk: el audio solo fluye mientras el botón está presionado */
+  setTalkActive(active: boolean): void {
+    if (active === this.talkActive) return;
+    this.talkActive = active;
+    if (active) {
+      // Presionar: turno nuevo; corta a Lula al instante si estaba hablando
+      this.vadSpeechMs = 0;
+      this.interruptPlayback();
+      return;
     }
+    // Soltar: fin del turno del usuario; solo se envía si hubo habla real
+    if (this.vadSpeechMs >= MIN_USER_SPEECH_MS) {
+      this.flushUserTurn();
+      this.setThinking(true);
+    }
+    this.vadSpeechMs = 0;
   }
 
   /** Fetches a short-lived auth token minted by the backend (/api/token) */
@@ -243,7 +250,7 @@ export class GeminiLiveCall {
     this.ws = null; // prevents the onclose handler from reporting the drop
     ws?.close();
     this.connected = false;
-    this.vadActive = false;
+    this.talkActive = false;
     this.vadSpeechMs = 0;
 
     this.micStream?.getTracks().forEach((track) => track.stop());
@@ -468,37 +475,20 @@ export class GeminiLiveCall {
   // ---- Speech / viseme tracking ----------------------------------------
 
   /**
-   * Procesa cada chunk del micrófono (512 muestras = 32 ms a 16 kHz):
-   * mide energía con un VAD de cliente y decide el fin del turno del usuario.
-   * Así las pausas cortas ya no parten una frase en varios turnos y Lula solo
-   * responde al último input completo.
+   * Procesa cada chunk del micrófono (512 muestras = 32 ms a 16 kHz).
+   * Solo transmite mientras el botón de hablar está presionado; el RMS
+   * acumulado sirve para saber al soltar si el turno contiene habla real.
    */
   private handleCaptureChunk(chunk: Float32Array): void {
-    if (this.muted || !this.isConnected()) return;
+    if (!this.talkActive || !this.isConnected()) return;
 
-    const now = Date.now();
     let sum = 0;
     for (let i = 0; i < chunk.length; i++) sum += chunk[i] * chunk[i];
     const rms = Math.sqrt(sum / chunk.length);
     const chunkMs = (chunk.length / CAPTURE_SAMPLE_RATE) * 1000;
 
     if (rms > USER_SPEECH_RMS_THRESHOLD) {
-      if (!this.vadActive) {
-        this.vadActive = true;
-        this.vadSpeechMs = 0;
-      }
-      this.vadLastVoiceAt = now;
       this.vadSpeechMs += chunkMs;
-    }
-
-    // Turno cerrado: habla real seguida de silencio sostenido
-    if (
-      this.vadActive &&
-      this.vadSpeechMs >= MIN_USER_SPEECH_MS &&
-      now - this.vadLastVoiceAt > USER_TURN_SILENCE_MS
-    ) {
-      this.flushUserTurn();
-      this.setThinking(true); // el usuario terminó: Lula pasa a pensar
     }
 
     this.ws?.send(
@@ -515,7 +505,6 @@ export class GeminiLiveCall {
 
   /** audioStreamEnd: fuerza el cierre inmediato del turno parcial en curso */
   private flushUserTurn(): void {
-    this.vadActive = false;
     this.vadSpeechMs = 0;
     if (this.isConnected()) {
       this.ws?.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));

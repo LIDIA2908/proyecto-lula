@@ -32,6 +32,7 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
   const [liveThinking, setLiveThinking] = useState(false);
   const [liveSubtitle, setLiveSubtitle] = useState("");
   const [emotion, setEmotion] = useState<CharacterState | undefined>(undefined);
+  const [isTalkActive, setIsTalkActive] = useState(false);
   const liveCallRef = useRef<GeminiLiveCall | null>(null);
 
   // Real-time call duration timer
@@ -88,6 +89,17 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
   const formattedMinutes = String(Math.floor(callSeconds / 60)).padStart(2, "0");
   const formattedSeconds = String(callSeconds % 60).padStart(2, "0");
   const callDurationStr = `${formattedMinutes}:${formattedSeconds}`;
+
+  // Push-to-talk: el audio solo se captura mientras el botón está presionado
+  const handleTalkPress = () => {
+    setIsTalkActive(true);
+    liveCallRef.current?.setTalkActive(true);
+  };
+
+  const handleTalkRelease = () => {
+    setIsTalkActive(false);
+    liveCallRef.current?.setTalkActive(false);
+  };
 
   // Process user input question via AI Agent
   const handleAskQuestion = async (questionText: string) => {
@@ -218,9 +230,7 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
         <CallControls
           isMuted={isMuted}
           onToggleMute={() => {
-            const next = !isMuted;
-            setIsMuted(next);
-            liveCallRef.current?.setMuted(next);
+            setIsMuted(!isMuted);
           }}
           onEndCall={() => {
             liveCallRef.current?.disconnect();
@@ -237,6 +247,9 @@ export const LulaVideoCall: React.FC<LulaVideoCallProps> = ({
           isThinking={isThinking || liveThinking}
           isDarkMode={isDarkMode}
           liveMode={liveReady}
+          isTalkActive={isTalkActive}
+          onTalkPress={handleTalkPress}
+          onTalkRelease={handleTalkRelease}
         />
 
         {/* Visit State Machine Button */}

@@ -14,8 +14,12 @@ interface CallControlsProps {
   isListening: boolean;
   isThinking: boolean;
   isDarkMode?: boolean;
-  /** Gemini Live mode: mic always on with VAD, no push-to-talk button */
+  /** Gemini Live mode: un solo botón push-to-talk, sin mute */
   liveMode?: boolean;
+  /** Push-to-talk (solo liveMode): captura de audio mientras está presionado */
+  isTalkActive?: boolean;
+  onTalkPress?: () => void;
+  onTalkRelease?: () => void;
 }
 
 export const CallControls: React.FC<CallControlsProps> = ({
@@ -28,6 +32,9 @@ export const CallControls: React.FC<CallControlsProps> = ({
   isThinking,
   isDarkMode = true,
   liveMode = false,
+  isTalkActive = false,
+  onTalkPress,
+  onTalkRelease,
 }) => {
   const [inputText, setInputText] = useState("");
 
@@ -89,65 +96,120 @@ export const CallControls: React.FC<CallControlsProps> = ({
             : "bg-white border-slate-300 text-slate-900"
         }`}
       >
-        {/* Mute Mic Button */}
-        <button
-          onClick={onToggleMute}
-          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl border-2 border-b-4 flex items-center justify-center transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0 ${
-            isMuted
-              ? "bg-red-500/20 border-red-500"
-              : "bg-emerald-500 border-emerald-700 hover:bg-emerald-400"
-          }`}
-          title={isMuted ? "Activar Micrófono" : "Silenciar Micrófono"}
-        >
-          <Icon
-            name="microphone"
-            className="w-5 h-5"
-            colorClass={isMuted ? "bg-red-400" : "bg-slate-950"}
-          />
-        </button>
+        {liveMode ? (
+          <>
+            {/* Push-to-talk: UN solo botón; el audio solo se captura
+                mientras está presionado. Al soltar, el turno se envía. */}
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onTalkPress?.();
+              }}
+              onPointerUp={() => onTalkRelease?.()}
+              onPointerCancel={() => onTalkRelease?.()}
+              onPointerLeave={() => {
+                if (isTalkActive) onTalkRelease?.();
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+              className={`px-5 h-12 sm:px-7 sm:h-14 rounded-2xl border-2 border-b-4 font-black text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 transition-all duration-150 cursor-pointer flex-shrink-0 touch-none select-none ${
+                isTalkActive
+                  ? "bg-amber-400 border-amber-600 text-slate-950 scale-105 shadow-[0_0_20px_rgba(251,191,36,0.6)]"
+                  : "bg-emerald-500 hover:bg-emerald-400 border-emerald-700 text-slate-950 shadow-lg active:translate-y-0.5 active:border-b-2"
+              }`}
+              title={
+                isTalkActive
+                  ? "Suelta para enviarle tu voz a Lula"
+                  : "Mantén presionado para hablar"
+              }
+            >
+              {isTalkActive ? (
+                <AudioWaveVisualizer
+                  isMuted={false}
+                  isSpeaking={true}
+                  barCount={4}
+                  className="h-4"
+                  activeColor="bg-slate-950"
+                />
+              ) : (
+                <Icon name="microphone" className="w-5 h-5" colorClass="bg-slate-950" />
+              )}
+              <span>{isTalkActive ? "Grabando... suelta para enviar" : "Mantén para hablar"}</span>
+            </button>
 
-        {/* Voice Speech Listener Button (hidden in Gemini Live mode: mic is always on) */}
-        {!liveMode && (
-          <button
-            onClick={onStartVoiceListening}
-            disabled={isThinking}
-            className={`px-4 h-10 sm:px-5 sm:h-11 rounded-2xl border-2 border-b-4 font-black text-xs tracking-wider uppercase flex items-center gap-1.5 transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0 ${
-              isListening
-                ? "bg-amber-400 border-amber-600 text-slate-950 animate-pulse scale-105"
-                : "bg-emerald-500 hover:bg-emerald-400 border-emerald-700 text-slate-950"
-            }`}
-          >
-            {isListening ? (
-              <AudioWaveVisualizer
-                isMuted={false}
-                isSpeaking={true}
-                barCount={4}
-                className="h-3.5"
-                activeColor="bg-slate-950"
-              />
-            ) : (
+            {/* End Call Button */}
+            <button
+              onClick={onEndCall}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-red-500 hover:bg-red-400 border-2 border-b-4 border-red-700 text-white flex items-center justify-center shadow-lg transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0"
+              title="Finalizar Llamada"
+            >
               <Icon
-                name="speak"
-                className="w-4 h-4 sm:w-5 sm:h-5"
-                colorClass="bg-slate-950"
+                name="phone"
+                className="w-5 h-5"
+                colorClass="bg-white"
               />
-            )}
-            <span>{isListening ? "Escuchando..." : "Hablar a Lula"}</span>
-          </button>
-        )}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Mute Mic Button (solo modo fallback) */}
+            <button
+              onClick={onToggleMute}
+              className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl border-2 border-b-4 flex items-center justify-center transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0 ${
+                isMuted
+                  ? "bg-red-500/20 border-red-500"
+                  : "bg-emerald-500 border-emerald-700 hover:bg-emerald-400"
+              }`}
+              title={isMuted ? "Activar Micrófono" : "Silenciar Micrófono"}
+            >
+              <Icon
+                name="microphone"
+                className="w-5 h-5"
+                colorClass={isMuted ? "bg-red-400" : "bg-slate-950"}
+              />
+            </button>
 
-        {/* End Call Button */}
-        <button
-          onClick={onEndCall}
-          className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-red-500 hover:bg-red-400 border-2 border-b-4 border-red-700 text-white flex items-center justify-center shadow-lg transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0"
-          title="Finalizar Llamada"
-        >
-          <Icon
-            name="phone"
-            className="w-5 h-5"
-            colorClass="bg-white"
-          />
-        </button>
+            {/* Voice Speech Listener Button */}
+            <button
+              onClick={onStartVoiceListening}
+              disabled={isThinking}
+              className={`px-4 h-10 sm:px-5 sm:h-11 rounded-2xl border-2 border-b-4 font-black text-xs tracking-wider uppercase flex items-center gap-1.5 transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0 ${
+                isListening
+                  ? "bg-amber-400 border-amber-600 text-slate-950 animate-pulse scale-105"
+                  : "bg-emerald-500 hover:bg-emerald-400 border-emerald-700 text-slate-950"
+              }`}
+            >
+              {isListening ? (
+                <AudioWaveVisualizer
+                  isMuted={false}
+                  isSpeaking={true}
+                  barCount={4}
+                  className="h-3.5"
+                  activeColor="bg-slate-950"
+                />
+              ) : (
+                <Icon
+                  name="speak"
+                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  colorClass="bg-slate-950"
+                />
+              )}
+              <span>{isListening ? "Escuchando..." : "Hablar a Lula"}</span>
+            </button>
+
+            {/* End Call Button */}
+            <button
+              onClick={onEndCall}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-red-500 hover:bg-red-400 border-2 border-b-4 border-red-700 text-white flex items-center justify-center shadow-lg transition-all duration-150 active:translate-y-0.5 active:border-b-2 cursor-pointer flex-shrink-0"
+              title="Finalizar Llamada"
+            >
+              <Icon
+                name="phone"
+                className="w-5 h-5"
+                colorClass="bg-white"
+              />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
